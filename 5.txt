@@ -1,0 +1,135 @@
+def is_cyrillic_upper(s: str) -> bool:
+    if not s:
+        return False
+    CYRILLIC_UPPER = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'
+    for char in s:
+        if char not in CYRILLIC_UPPER:
+            return False
+    return True
+
+def _parse_fio(name_parts: list[str]) -> dict[str, str]:
+    fio = {}
+    patronymic_endings = ('ОВИЧ', 'ЕВИЧ', 'ИЧ', 'ОВНА', 'ЕВНА', 'ИЧНА')
+    surname_endings_male = ('ОВ', 'ЕВ', 'ИН', 'СКИЙ', 'ЦКОЙ')
+    surname_endings_female = ('ОВА', 'ЕВА', 'ИНА', 'СКАЯ', 'ЦКАЯ')
+
+    remaining_parts = []
+    patronymic_found = False
+    
+    for part in name_parts:
+        if not patronymic_found and part.endswith(patronymic_endings):
+            fio['patronymic'] = part
+            patronymic_found = True
+        else:
+            remaining_parts.append(part)
+    
+    if len(remaining_parts) != 2:
+        return {}
+
+    part1, part2 = remaining_parts
+
+    is_part1_surname = part1.endswith(surname_endings_male) or part1.endswith(surname_endings_female)
+    is_part2_surname = part2.endswith(surname_endings_male) or part2.endswith(surname_endings_female)
+
+    if is_part1_surname and not is_part2_surname:
+        fio['last'] = part1
+        fio['first'] = part2
+    elif is_part2_surname and not is_part1_surname:
+        fio['last'] = part2
+        fio['first'] = part1
+    else:
+        fio['last'] = part1
+        fio['first'] = part2
+        
+    return fio
+
+def form_badge(team_splits: dict[str, list[str]], participants: list[str]) -> list[str]:
+    all_personnel_ids = set()
+    for member_list in team_splits.values():
+        for member_id in member_list:
+            all_personnel_ids.add(member_id)
+
+    employee_data = {}
+
+    for p_string in participants:
+        personnel_id = None
+        parts = p_string.split('_')
+        for part in parts:
+            if part in all_personnel_ids:
+                personnel_id = part
+                break
+        if not personnel_id:
+            continue
+
+        func = None
+        if p_string.startswith("DS_"):
+            func = "DS"
+        elif p_string.startswith("AN_"):
+            func = "AN"
+        else:
+            if 'BE' in parts:
+                func = 'BE'
+            elif 'FE' in parts:
+                func = 'FE'
+            else:
+                for part in parts:
+                    if part.startswith('MB'):
+                        func = 'MB'
+                        break
+
+        all_components = p_string.replace('-', '_').split('_')
+        
+        cyrillic_words = []
+        for p in all_components:
+            if is_cyrillic_upper(p):
+                cyrillic_words.append(p)
+        
+        fio = {}
+        if len(cyrillic_words) == 3:
+            fio = _parse_fio(cyrillic_words)
+
+        employee_data[personnel_id] = {
+            'last': fio.get('last', 'ERROR_L'),
+            'first': fio.get('first', 'ERROR_F'),
+            'patronymic': fio.get('patronymic', 'ERROR_P'),
+            'func': func
+        }
+
+    result_badges = []
+    for team_name, member_ids in team_splits.items():
+        for p_id in member_ids:
+            if p_id in employee_data:
+                details = employee_data[p_id]
+                badge_string = (
+                    details['last'] + '_' + details['first'] + '_' + details['patronymic'] + '_'
+                    + details['func'] + '_' + team_name
+                )
+                result_badges.append(badge_string)
+
+    return result_badges
+
+
+def solution():
+    try:
+        n_teams, k_participants = map(int, input().split())
+    except (IOError, ValueError):
+        return
+
+    team_splits = {}
+    
+    for _ in range(n_teams):
+        team_info = input().split()
+        name = team_info[0]
+        members = team_info[1:]
+        team_splits[name] = members
+
+    participants_list = []
+    for _ in range(k_participants):
+        participants_list.append(input())
+
+    badges = form_badge(team_splits, participants_list)
+
+    for badge in badges:
+        print(badge)
+
+solution()
